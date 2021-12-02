@@ -6,29 +6,50 @@ use std::time::Duration;
 use std::net::{TcpListener, TcpStream};                                                                                                                                                                                                                                              
 use std::sync::mpsc::channel;                                                                                                                                                                                                                                                        
                                                                                                                                                                                                                                                                                      
-//Adresse d'écoute                                                                                                                                                                                                                                                                   
-const LISTNER_ADDR: &str = "127.0.0.1:9999";                                                                                                                                                                                                                                         
-                                                                                                                                                                                                                                                                                     
-fn main() {                                                                                                                                                                                                                                                                          
+//Adresse d'écoute
+const LISTNER_ADDR: &str = "127.0.0.1:9999";
+
+fn send_message(&mut String) {
+
+}
+
+fn main() {
     //lancement du TCPListener et écoute continue du socket                                                                                                                                                                                                                          
     let server = TcpListener::bind(LISTNER_ADDR).expect("TCPListener échoué");                                                                                                                                                                                                       
     server.set_nonblocking(true).expect("impossible de mettre la connexion en 'nonblocking'");                                                                                                                                                                                       
                                                                                                                                                                                                                                                                                      
     //Initialise client vector macro list
-    let client = vec![];
-
+    let mut client = vec![];
 
     //Création de la channel de chat
-    //https://doc.rust-lang.org/std/sync/mpsc/
+    //Voir --> https://doc.rust-lang.org/std/sync/mpsc/
     let (tx, rx) = channel();
-    thread::spawn(move|| {
-        tx.send(10).unwrap();
-    });
-    assert_eq!(rx.recv().unwrap(), 10);
 
     //boucle de réception + affichage des messages
     loop {
+        //DOC --> https://doc.rust-lang.org/std/net/struct.TcpListener.html
+        if let Ok((mut _socket, addr)) = server.accept() {
+            println!("client {:?} connected !", addr);
 
+            let tx = tx.clone();
+            client.push(socket.try_clone().expect("impossible de cloner le client dans vec![]"));
+
+
+            //Envoie de message sur le flux tx (transmission)
+            thread::spawn(move || {
+                let msg = String::from("hello world !");
+                let _sending = match tx.send(msg) {
+                    Ok(sending) => sending,
+                    Err(_error) => panic!("message cannot be send"),
+                };
+                thread::sleep(Duration::from_millis(10));
+            });
+
+
+
+            thread::sleep(Duration::from_millis(10));
+            }
+        }
 
     }
 
