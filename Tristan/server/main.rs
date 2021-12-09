@@ -8,10 +8,10 @@ use std::str::from_utf8;
 //Adresse d'écoute
 const LISTNER_ADDR: &str = "127.0.0.1:9999";
 
-fn handle_client(mut stream: TcpStream, adresse: &str) {
+fn handle_client(mut stream: TcpStream, adresse: &str, clients: &Vec<TcpStream>) {
     loop {
         let mut data = [0 as u8; 50]; // buffer 50 bytes
-        let msguser:Vec<u8> = Vec::new();
+        //let msguser:Vec<u8> = Vec::new();
 
 
         while match stream.read(&mut data) {
@@ -22,7 +22,7 @@ fn handle_client(mut stream: TcpStream, adresse: &str) {
                     return
                 }
                 // Ecrit dans la console et send le message au user distant
-                stream.write(&data[0..size]).unwrap();
+                stream.write_all(&data[0..size]).unwrap();
 
                 let msguser = from_utf8(&data).unwrap();
                 println!("-> L'utilisateur {} à envoyé: {}\n", stream.peer_addr().unwrap(), msguser);
@@ -41,7 +41,6 @@ fn handle_client(mut stream: TcpStream, adresse: &str) {
 
 fn main() {
     let listener = TcpListener::bind(LISTNER_ADDR).expect("TCPListener échoué");
-    server.set_nonblocking(true).expect("impossible de mettre la connexion en 'nonblocking'");
     // accepte les connection, et crée un thread nouveau thread pour chacune d'entre elle
     println!("écoute sur le port 3333....");
 
@@ -61,7 +60,7 @@ fn main() {
 
                 thread::spawn(move|| {
                     // connexion réussi
-                    handle_client(stream, &*adresse)
+                    handle_client(stream, &*adresse, &clients)
                 });
             }
             Err(e) => {
