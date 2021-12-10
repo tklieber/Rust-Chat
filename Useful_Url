@@ -3,3 +3,12 @@ https://doc.rust-lang.org/book/ch08-01-vectors.html
 https://doc.rust-lang.org/book/ch05-01-defining-structs.html
 https://doc.rust-lang.org/std/keyword.struct.html
 https://www.youtube.com/watch?v=4DqP57BHaXI
+
+----
+https://docs.rs/bb8/latest/bb8/
+https://docs.rs/tokio/0.1.12/tokio/net/struct.TcpStream.html#method.connect
+https://stackoverflow.com/questions/59298027/how-to-bind-on-tcp-client-side-in-rust-tokio
+https://newbedev.com/how-can-i-test-a-future-that-is-bound-to-a-tokio-tcpstream
+https://www.reddit.com/r/rust/comments/o00ijn/how_to_reconnect_a_tokio_tcpstream_started_in_main/
+https://users.rust-lang.org/t/how-to-close-tcp-connection-when-using-tokio/66533
+https://docs.rs/tokio/0.2.11/tokio/sync/broadcast/struct.Sender.html
