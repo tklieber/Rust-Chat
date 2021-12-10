@@ -1,112 +1,130 @@
 //Server
 
-use std::thread;
-use std::net::{TcpListener, TcpStream};
-use std::io::{Read, Write, ErrorKind};
-use std::str::from_utf8;
+//use std::io::{Read, Write, ErrorKind};
+use tokio::{sync::broadcast, net::TcpListener, io::BufReader};
+use tokio::io::AsyncWriteExt;
+use tokio::io::AsyncBufReadExt;
+
+
 
 //Adresse d'écoute
-const LISTNER_ADDR: &str = "0.0.0.0:9969";
+const LISTNER_ADDR: &str = "127.0.0.1:9999";
 
-struct User {
-    username: String,
-    address: String,
+
+
+#[tokio::main]
+async fn main() {
+    let listener = TcpListener::bind(LISTNER_ADDR).await.unwrap();
+    println!("En attente d'un client....");
+
+    let (tx, _rx) = broadcast::channel(10);
+
+    loop {
+        //Accept les clients qui viennent sur le TCPStream
+        let (mut socket, addr) = listener.accept().await.unwrap();
+
+        let tx = tx.clone();
+        let mut rx = tx.subscribe();
+        println!("Nouvelle connexion: {}\n", addr);
+
+        tokio::spawn(async move {
+            //handle_client(stream, &*adresse, &tx, &rx);
+            //nécessité de split le socket pour pouvoir écouter et écrire en même temps
+            let (reading, mut writing) = socket.split();
+
+            let mut reading = BufReader::new(reading);
+            let mut recved_data = String::new();
+            // buffer -> Obligé que ça soit un String car .clone()
+
+            loop {
+                //permet de lire et envoyer en même temps, un peu comme thread
+                tokio::select! {
+                    resultat_select = reading.read_line(&mut recved_data) => {
+                        //si on reçoit rien -> break
+                        if resultat_select.unwrap() == 0 { break }
+
+                        tx.send((recved_data.clone(), addr)).unwrap();
+                        println!("{} à écrit : {}",addr, recved_data);
+                        recved_data.clear();
+                    }
+                    resultat_select = rx.recv() => {
+                        let (msguser, other_addresses) = resultat_select.unwrap();
+
+                        if addr != other_addresses {
+                            let sent_msguser = format!("{} a envoyé : {}", addr, msguser);
+                            writing.write_all((sent_msguser).as_bytes()).await.unwrap()
+                        }
+                    }
+                }
+
+
+                /*
+                match stream.read(&mut data) {
+                    Ok(size) => {
+                        //Si 0 octect reçu --> client déconnecté
+                        if size < 1 {
+                            println!("client {} déconnecté", adresse);
+                            return
+                        }
+                        /*
+                        // Ecrit dans la console et send le message au user distant
+                        // OLD -> stream.write_all(&data[0..size]).unwrap();
+                        tx.send(stream.read(&mut data).unwrap());
+                        stream.write_all(&data[0..size]).unwrap();
+
+                        let msguser = from_utf8(&data).unwrap();
+                        println!("-> L'utilisateur {} à envoyé: {}\n", stream.peer_addr().unwrap(), msguser);
+                        true
+                         */
+                    },
+                    Err(ref e) if e.kind() == ErrorKind::WouldBlock => { return }
+                    Err(e) => {
+                        println!("Erreur I/O rencontré : {}", e);
+                        return
+                    },
+                }{}
+                 */
+
+            }
+        });
+    }
 }
-
-fn handle_client(mut stream: TcpStream, adresse: &str, user_addr: String) {
-    let returned = define_user(stream, &*adresse, &*user_addr);
+/*
+fn handle_client(mut stream: TcpStream, adresse: &str, tx: &dyn Send, rx: &dyn Send) {
     loop {
         let mut data = [0 as u8; 50]; // buffer 50 bytes
 
-        while match stream.read(&mut data) {
+        match stream.read(&mut data) {
             Ok(size) => {
                 //Si 0 octect reçu --> client déconnecté
                 if size < 1 {
-                    println!("client déconnecté {}", adresse);
+                    println!("client {} déconnecté", adresse);
                     return
                 }
+                /*
                 // Ecrit dans la console et send le message au user distant
-                stream.write(&data[0..size]).unwrap();
+                // OLD -> stream.write_all(&data[0..size]).unwrap();
+                tx.send(stream.read(&mut data).unwrap());
+                stream.write_all(&data[0..size]).unwrap();
 
                 let msguser = from_utf8(&data).unwrap();
                 println!("-> L'utilisateur {} à envoyé: {}\n", stream.peer_addr().unwrap(), msguser);
                 true
+                 */
             },
-            Err(ref e) if e.kind() == ErrorKind::WouldBlock => { false }
+            Err(ref e) if e.kind() == ErrorKind::WouldBlock => { return }
             Err(e) => {
                 println!("Erreur I/O rencontré : {}", e);
-                false
+                return
             },
         }{}
+        // Ecrit dans la console et send le message au user distant
+        // OLD -> stream.write_all(&data[0..size]).unwrap();
+        tx.send(stream.read(&mut data).unwrap());
+        stream.write_all(&data).unwrap();
+
+        let msguser = from_utf8(&data).unwrap();
+        println!("-> L'utilisateur {} à envoyé: {}\n", stream.peer_addr().unwrap(), msguser);
     }
 }
-
-fn define_user(mut stream: TcpStream, formatted_address: &str, adresse: &str) -> bool{
-    let mut data = [0 as u8; 50]; //define buffer
-
-    //demande le pseudo qui doit etre utilisé
-    let ask_pseudo: String = String::from("Entrez le pseudo que vous voulez utiliser");
-    let asking = ask_pseudo.as_byte();
-    stream.write(asking).expect("erreur lors de l'envoie du message dans le stream");
-
-    let returned: bool = false;
-    match stream.read(&mut data) {
-        Ok(size) => {
-            //Si 0 octet reçu --> client déconnecté
-            if size < 1 {
-                println!("client déconnecté {}", adresse);
-                returned = false;
-            }
-            // Ecrit dans la console et send le message au user distant
-            stream.write(&data[0..size]).unwrap();
-            let username = from_utf8(&data).unwrap();
-            println!("-> L'utilisateur {} à envoyé le pseudo suivant: {}\n", stream.peer_addr().unwrap(), username);
-
-            returned = true;
-        },
-        Err(ref e) if e.kind() == ErrorKind::WouldBlock => { returned = false; }
-        Err(e) => {
-            println!("Erreur I/O rencontré : {}", e);
-            returned = false;
-        },
-    }{}
-    returned
-}
-
-
-fn main() {
-    let listener = TcpListener::bind(LISTNER_ADDR).expect("TCPListener échoué");
-    //listener.set_nonblocking(true).unwrap();
-    println!("écoute sur le port 3333....");
-
-//watch this -> https://stackoverflow.com/questions/60219160/how-to-store-tcpstream-inside-a-hashmap
-    for stream in listener.incoming() {
-        match stream {
-            Ok(stream) => {
-                let formatted_address = match stream.peer_addr() {
-                    Ok(addr) => {
-                        format!("[adresse : {}]", addr)
-                    },
-                    Err(_) => "inconnue".to_owned()
-                };
-
-                let adresse = match stream.peer_addr() {
-                    Ok(addr) => addr,
-                    Err(e) => {println!("Erreur : {}", e);}
-                };
-
-                println!("Nouvelle connexion: {}", stream.peer_addr().unwrap());
-
-                //handle client
-                thread::spawn(move|| {
-                    handle_client(stream, &*formatted_address, &*adresse)
-                });
-            }
-            Err(e) => {
-                println!("Erreur: {}", e);
-            }
-        }
-    }
-    // close sockets
-    drop(listener);
-}
+*/
