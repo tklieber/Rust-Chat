@@ -1,12 +1,14 @@
 //Client
 
+use std::sync::thread;
 use std::io;
 use tokio::{
-    net::{TcpStream, TcpSocket},
-    io::{AsyncWriteExt,AsyncReadExt}
+    net::TcpStream,
+    io::{AsyncWriteExt,AsyncBufReadExt, BufReader},
 };
 
 const SERVER_ADDR: &str = "127.0.0.1:9999";
+
 
 fn user_input() -> String {
     let mut buffer = String::new();
@@ -14,19 +16,23 @@ fn user_input() -> String {
 
     match stdin.read_line(&mut buffer){
         Ok(_) => {
-        //Enleve la touche 'Entrer'
+            //Enleve la touche 'Entrer'
             if buffer.ends_with('\n') {
                 buffer.pop();
                 if buffer.ends_with('\r') {
                     buffer.pop();
                 }
             }
-            println!("> entré : {}", buffer)
+            println!("> entré : {}", buffer);
+            return buffer
         },
         Err(e) => println!("Une erreur est survenue : {}", e)
     }
     buffer
 }
+
+
+/*
 //a adapter
 fn send_and_receive_msg(mut stream: &TcpStream){
     loop{
@@ -40,8 +46,10 @@ fn send_and_receive_msg(mut stream: &TcpStream){
         //let mut data = [0 as u8; 25]; // buffer 6 bytes
         let mut data: Vec<u8> = vec![0; msglen];
 
+        /*
+        PLUS NÉCESSAIRE -> UN SIMPLE READ SUFFIT
         match stream.read_exact(&mut data) {
-            // A MODIFIER !!!
+            // A MODIFIER !!! -> ne renvoie pas la rep
             Ok(_) => {
                 if &data == msg {
                     println!("Message reçu!");
@@ -54,30 +62,63 @@ fn send_and_receive_msg(mut stream: &TcpStream){
                 println!("Erreur dans la réception des données: {}", e);
             }
         }
+        */
     }
 }
-
+*/
 #[tokio::main]
 async fn main() {
     let mut connection = TcpStream::connect(SERVER_ADDR).await.unwrap();
-    let (mut reader, mut writer) = connection.split();
     println!("connected");
+
+    let (reader, mut writer) =  connection.split();
+    let mut reader = BufReader::new(reader);
+
+
+    //USELESS
+    let mut addr = &connection.local_addr().unwrap();
+    println!("{}",addr);
+
+    let mut recved_data = String::new();
+
+    tokio::spawn(async move {
+        loop{
+            let input: String = user_input();
+            
+                    thread::select! {
+                        //lit la réception de TCPListener et l'affiche = affiche les msg entrant
+                        resultat_select = reader.read_line(&mut recved_data) => {
+                            //si on reçoit rien -> break
+                            if resultat_select.unwrap() == 0 { return }
+
+                            println!("your address{}",addr);
+                            //println!("{}", resultat_select);
+                            recved_data.clear();
+                        }
+                        //Lit et envoie stdin = affiche et envoie le stdin
+                        resultat_select = writer.write_all(input.as_bytes()).await.unwrap() => {
+                            match resultat_select {
+                                Ok(_) => { println!("send") },
+                                Err(e) => {println!("Une Erreur est survenue : {}", e)}
+                            }
+                            println!("ok");
+                        }
+                    }
+            }
+        });
 }
 
 /*
 ----------------------------------------------
                 OLD
 ----------------------------------------------
-
 use std::net::{TcpStream};
 use std::io::{Read, Write};
 use std::str::from_utf8;
 use std::io;
-
 fn user_input() -> String {
     let mut buffer = String::new();
     let stdin = io::stdin();
-
     match stdin.read_line(&mut buffer){
         Ok(_) => {
             //Enleve la touche 'Entrer'
@@ -93,19 +134,15 @@ fn user_input() -> String {
     }
     buffer
 }
-
 fn send_and_receive_msg(mut stream: &TcpStream){
     loop{
         let input: String = user_input();
         let msg = input.as_bytes();
         let msglen = msg.len();
-
         stream.write(msg).expect("erreur lors de l'envoie du message dans le stream");
         print!("Message envoyé, en attente de la réponse.....");
-
         //let mut data = [0 as u8; 25]; // buffer 6 bytes
         let mut data: Vec<u8> = vec![0; msglen];
-
         match stream.read_exact(&mut data) {
             Ok(_) => {
                 if &data == msg {
@@ -123,7 +160,6 @@ fn send_and_receive_msg(mut stream: &TcpStream){
         }
     }
 }
-
 fn main() {
     match TcpStream::connect("localhost:9999") {
         Ok(mut stream) => {
@@ -133,7 +169,7 @@ fn main() {
         Err(e) => {
             println!("Erreur de connexion: {}", e);
         }
-            }   
+            }
     println!("Connexion terminé");
 }
 */
