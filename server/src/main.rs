@@ -47,8 +47,9 @@ async fn main() {
                         }
 
                         tx.send((recved_data.clone(), addr)).unwrap(); //-> rx
+
                         //on enlève la touche "entré"
-                        //if recved_data.ends_with('\n') { recved_data.pop(); if recved_data.ends_with('\r') { recved_data.pop();}}
+                        if recved_data.ends_with('\n') { recved_data.pop(); if recved_data.ends_with('\r') { recved_data.pop();}}
 
                         println!("{} à écrit : {}",addr, recved_data);
                         recved_data.clear();
@@ -62,8 +63,6 @@ async fn main() {
                         }
                     }
                 }
-
-
                 /*
                 match stream.read(&mut data) {
                     Ok(size) => {
@@ -89,7 +88,6 @@ async fn main() {
                     },
                 }{}
                  */
-
             }
         });
     }
