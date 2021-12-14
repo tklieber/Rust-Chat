@@ -1,16 +1,15 @@
 #![allow(unused_variables)]
-#![allow(unused_imports)]
 
-use openssl::rsa::{Padding, Rsa};
-use openssl::symm::Cipher;
+
 use std::env;
-use std::str::from_utf8;
 use std::process;
 use std::thread;
-use std::io::{self, Read, Write, Error};
+use std::io::{self, Read, Write};
 use std::net::TcpStream;
-use std::net::TcpListener;
-
+use aes::Aes128;
+use block_modes::{BlockMode, Cbc};
+use block_modes::block_padding::Pkcs7;
+use hex_literal::hex;
 
 const SERVER_ADDR:&str = "127.0.0.1:9999";
 
@@ -92,22 +91,26 @@ fn main() {
         -----------------
         CIPHER TEST
         -----------------
+        */
         type Aes128Cbc = Cbc<Aes128, Pkcs7>;
         let key = hex!("000102030405060708090a0b0c0d0e0f");
         let iv = hex!("f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff");
         let cipher = Aes128Cbc::new_from_slices(&key, &iv).unwrap();
+        let pos = user_buffer.as_bytes().len();
         let user_buffer_encrypted = cipher.encrypt_vec(user_buffer.as_bytes());
-        //let user_buffer_encrypted: String = encrypt(&mut user_buffer, cipher);
-        //let to_stringed_user_buffer = std::str::from_utf8(&user_buffer_encrypted).unwrap();
-        //println!("{:?} -> message chiffré", to_stringed_user_buffer);
-        */
+        let final_sent_buffer:&[u8] = &user_buffer_encrypted;
+        //let to_stringed_user_buffer = std::str::from_utf8_lossy(&user_buffer_encrypted).unwrap();
+        println!("{:?} -------------> chiffré", final_sent_buffer);
+        //-----------> on envoie un &[u8]
+
+        /*
         let rsa = Rsa::generate(512).unwrap();
         let mut cryptage = vec![0; rsa.size() as usize];
         let _ = rsa.public_encrypt(user_buffer.as_bytes(), &mut cryptage, Padding::PKCS1).unwrap();
         println!("Cryptage caractères : {}", String::from_utf8_lossy(cryptage.as_slice()));
         let buffer_to_send = String::from_utf8_lossy(cryptage.as_slice());
-
-        output_stream.write_all(buffer_to_send.as_bytes()).unwrap();
+        */
+        output_stream.write_all(final_sent_buffer).unwrap();
         output_stream.flush().unwrap();
         user_buffer.clear();
     }
