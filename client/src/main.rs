@@ -28,6 +28,19 @@ fn decrypt (user_buffer_encrypted : &mut String, cipher: Cbc<Aes128, Pkcs7>) -> 
 }
  */
 
+fn dechiffrer (client_buffer: &[u8]) -> String{
+    //cypher variables
+    //----------------
+    type Aes128Cbc = Cbc<Aes128, Pkcs7>;
+    let key = hex!("000102030405060708090a0b0c0d0e0f");
+    let iv = hex!("f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff");
+    let cipher = Aes128Cbc::new_from_slices(&key, &iv).unwrap();
+    //---------------
+    let user_buffer_uncrypted = cipher.decrypt_vec(client_buffer).unwrap();
+    let prefinal_buffer: &[u8] = &user_buffer_uncrypted;
+    let stdout_string:&str = std::str::from_utf8(&prefinal_buffer).unwrap();
+    stdout_string.to_string()
+}
 
 impl Program {
     fn new(name: String) -> Program {
@@ -60,7 +73,7 @@ fn main() {
     let mut input_stream = stream.try_clone().unwrap();
 
     let handler = thread::spawn(move || {
-        let mut client_buffer = vec![0u8];
+        let mut client_buffer: &mut [u8] = &mut [0u8;2048];
 
         loop {
             match input_stream.read(&mut client_buffer) {
@@ -71,7 +84,9 @@ fn main() {
                     }
                     else
                     {
-                        io::stdout().write_all(&client_buffer).unwrap();
+                        let new_slice = &client_buffer[0..n];
+                        let printed_strings = dechiffrer(&new_slice);
+                        println!("{}",printed_strings);
                         io::stdout().flush().unwrap();
                     }
                 },
@@ -100,7 +115,6 @@ fn main() {
         let user_buffer_encrypted = cipher.encrypt_vec(user_buffer.as_bytes());
         //  Vec<u8>  ->  &[u8]
         let final_sent_buffer:&[u8] = &user_buffer_encrypted;
-        println!("{:?} -------------> chiffré", final_sent_buffer);
         //-----------> on envoie un &[u8]
         output_stream.write_all(final_sent_buffer).unwrap();
         output_stream.flush().unwrap();
