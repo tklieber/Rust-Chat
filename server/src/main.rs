@@ -1,16 +1,13 @@
 //Server
 #![allow(unused_variables)]
-#![allow(unused_imports)]
+//#![allow(unused_imports)]
 
-use tokio::{sync::broadcast, net::TcpListener, io::BufReader};
-use tokio::io::AsyncWriteExt;
-use tokio::io::AsyncBufReadExt;
+use tokio::{sync::broadcast, net::TcpListener, io::{BufReader, AsyncWriteExt, AsyncReadExt}};
 use aes::Aes128;
-use block_modes::{BlockMode, Cbc};
-use block_modes::block_padding::Pkcs7;
+use block_modes::{BlockMode, Cbc, block_padding::Pkcs7};
 use hex_literal::hex;
-use tokio::io::AsyncReadExt;
-use std::io::Bytes;
+
+
 
 //Adresse d'écoute
 const LISTNER_ADDR: &str = "127.0.0.1:9999";
@@ -29,8 +26,8 @@ fn dechiffrer (recv_data: &[u8]) -> String{
     let stdout_string:&str = std::str::from_utf8(&prefinal_buffer).unwrap();
     stdout_string.to_string()
 }
-// A METTRE EN COMMENTAIRE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-fn chiffrer (msguser: String) -> &'static [u8]{
+
+fn chiffrer (msguser: String) -> Vec<u8>{
     //cypher variables
     //----------------
     type Aes128Cbc = Cbc<Aes128, Pkcs7>;
@@ -38,14 +35,10 @@ fn chiffrer (msguser: String) -> &'static [u8]{
     let iv = hex!("f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff");
     let cipher = Aes128Cbc::new_from_slices(&key, &iv).unwrap();
     //---------------
-
     let msguser: &[u8] = &msguser.as_bytes();
-    let user_buffer_encrypted:&[u8] = cipher.encrypt_vec(msguser).unwrap();
-    //user_buffer_encrypted.as_slice()
-
+    let user_buffer_encrypted = cipher.encrypt_vec(&msguser);
+    user_buffer_encrypted
 }
-
-
 
 #[tokio::main]
 async fn main() {
@@ -63,14 +56,12 @@ async fn main() {
         println!("Nouvelle connexion: {}", addr);
 
         tokio::spawn(async move {
-            //nécessité de split le socket pour pouvoir écouter et écrire en même temps
             let (reading, mut writing) = socket.split();
 
             let mut reading = BufReader::new(reading);
             let recved_data: &mut[u8] = &mut [0u8;2048];
 
             loop {
-                //permet de lire et envoyer en même temps, un peu comme thread
                 tokio::select! {
                     resultat_select = reading.read(recved_data) => {
                         let buf_size = resultat_select.unwrap(); //nb d'élément du buffer reçu
@@ -103,25 +94,14 @@ async fn main() {
                     resultat_select = rx.recv() => {
                         let (msguser, other_addresses) = resultat_select.unwrap();
                         if addr != other_addresses {
-                            let sent_msguser = format!("{} a envoyé : {}", addr, msguser);
+                            let msguser_to_send = format!("{} a envoyé : {}", addr, msguser);
 
-                            //A METTRE EN COMMENTAIRE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                            let crypted_msg = chiffrer(sent_msguser.clone());
+                            let crypted_msg = chiffrer(msguser_to_send.clone());
+                            let crypted_msg = crypted_msg.as_slice();
 
-
-                            //cypher variables
-                            //---------------
-                            type Aes128Cbc = Cbc<Aes128, Pkcs7>;
-                            let key = hex!("000102030405060708090a0b0c0d0e0f");
-                            let iv = hex!("f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff");
-                            let cipher = Aes128Cbc::new_from_slices(&key, &iv).unwrap();
-                            //---------------
-                            let sent_msguser: &[u8] = &sent_msguser.as_bytes();
-                            let user_buffer_encrypted = cipher.encrypt_vec(sent_msguser);
-                            let bytes_to_send = user_buffer_encrypted.as_slice();
                             //println!("slice avant envoie : {:?}\n", bytes_to_send);
 
-                            writing.write_all(bytes_to_send).await.unwrap();
+                            writing.write_all(crypted_msg).await.unwrap();
                         }
                     }
                 }
