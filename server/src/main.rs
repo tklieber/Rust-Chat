@@ -10,7 +10,7 @@ use block_modes::{BlockMode, Cbc};
 use block_modes::block_padding::Pkcs7;
 use hex_literal::hex;
 use tokio::io::AsyncReadExt;
-use std::io::bytes::Bytes;
+use std::io::Bytes;
 
 //Adresse d'écoute
 const LISTNER_ADDR: &str = "127.0.0.1:9999";
@@ -25,12 +25,11 @@ fn dechiffrer (recv_data: &[u8]) -> String{
     let cipher = Aes128Cbc::new_from_slices(&key, &iv).unwrap();
     //---------------
     let user_buffer_uncrypted = cipher.decrypt_vec(recv_data).unwrap();
-    println!("{:?} -> after decrypt\n",user_buffer_uncrypted);
     let prefinal_buffer: &[u8] = &user_buffer_uncrypted;
     let stdout_string:&str = std::str::from_utf8(&prefinal_buffer).unwrap();
     stdout_string.to_string()
 }
-
+// A METTRE EN COMMENTAIRE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 fn chiffrer (msguser: String) -> &'static [u8]{
     //cypher variables
     //----------------
@@ -41,10 +40,11 @@ fn chiffrer (msguser: String) -> &'static [u8]{
     //---------------
 
     let msguser: &[u8] = &msguser.as_bytes();
-    let user_buffer_encrypted = cipher.encrypt_vec(msguser);
-    println!("{:?} -> after crypt\n",user_buffer_encrypted);
-    user_buffer_encrypted.as_slice()
+    let user_buffer_encrypted:&[u8] = cipher.encrypt_vec(msguser).unwrap();
+    //user_buffer_encrypted.as_slice()
+
 }
+
 
 
 #[tokio::main]
@@ -74,29 +74,26 @@ async fn main() {
                 tokio::select! {
                     resultat_select = reading.read(recved_data) => {
                         let buf_size = resultat_select.unwrap(); //nb d'élément du buffer reçu
+                        //si on ne reçoit rien alors ça romp le TCPStream
+                         if buf_size < 1 {
+                            println!("Utilisateur {} s'est déconnecté", addr);
+                            break
+                         }
+
                         let new_slice = &recved_data[0..buf_size];
-
                         let mut recved_string = dechiffrer(&new_slice);
-                        println!("{}",recved_string);
 
+                        //si l'user entre "quit" alors ça romp le TCPStream
+                        if recved_string == String::from(":quit\n"){
+                            println!("Utilisateur {}, s'est déconnecté", addr);
+                            break
+                        }
 
                         //on enlève la touche "entré"
                         if recved_string.ends_with('\n') {
                             recved_string.pop();
                             if recved_string.ends_with('\r') {
                                 recved_string.pop();}
-                        }
-
-                        //si on ne reçoit rien alors ça romp le TCPStream
-                         //-------if recved_data == 0 {
-                        //------- println!("Utilisateur {} s'est déconnecté", addr);
-                         //------- break
-                         //------- }
-
-                        //si l'user entre "quit" alors ça romp le TCPStream
-                        if recved_string == String::from(":quit\n"){
-                            println!("Utilisateur {}, s'est déconnecté", addr);
-                            break
                         }
 
                         println!("{} à écrit : {}",addr, recved_string);
@@ -106,7 +103,11 @@ async fn main() {
                     resultat_select = rx.recv() => {
                         let (msguser, other_addresses) = resultat_select.unwrap();
                         if addr != other_addresses {
-                            let sent_msguser = format!("{} a envoyé : {:?}", addr, msguser);
+                            let sent_msguser = format!("{} a envoyé : {}", addr, msguser);
+
+                            //A METTRE EN COMMENTAIRE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                            let crypted_msg = chiffrer(sent_msguser.clone());
+
 
                             //cypher variables
                             //---------------
@@ -117,9 +118,10 @@ async fn main() {
                             //---------------
                             let sent_msguser: &[u8] = &sent_msguser.as_bytes();
                             let user_buffer_encrypted = cipher.encrypt_vec(sent_msguser);
-                            println!("{:?} -> after crypt\n",user_buffer_encrypted);
+                            let bytes_to_send = user_buffer_encrypted.as_slice();
+                            //println!("slice avant envoie : {:?}\n", bytes_to_send);
 
-                            writing.write_all(Bytes::from(&user_buffer_encrypted.as_slice())).await.unwrap();
+                            writing.write_all(bytes_to_send).await.unwrap();
                         }
                     }
                 }
