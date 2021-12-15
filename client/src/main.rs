@@ -96,20 +96,12 @@ fn main() {
         let key = hex!("000102030405060708090a0b0c0d0e0f");
         let iv = hex!("f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff");
         let cipher = Aes128Cbc::new_from_slices(&key, &iv).unwrap();
-        let pos = user_buffer.as_bytes().len();
+        //encrypt the data
         let user_buffer_encrypted = cipher.encrypt_vec(user_buffer.as_bytes());
+        //  Vec<u8>  ->  &[u8]
         let final_sent_buffer:&[u8] = &user_buffer_encrypted;
-        //let to_stringed_user_buffer = std::str::from_utf8_lossy(&user_buffer_encrypted).unwrap();
         println!("{:?} -------------> chiffré", final_sent_buffer);
         //-----------> on envoie un &[u8]
-
-        /*
-        let rsa = Rsa::generate(512).unwrap();
-        let mut cryptage = vec![0; rsa.size() as usize];
-        let _ = rsa.public_encrypt(user_buffer.as_bytes(), &mut cryptage, Padding::PKCS1).unwrap();
-        println!("Cryptage caractères : {}", String::from_utf8_lossy(cryptage.as_slice()));
-        let buffer_to_send = String::from_utf8_lossy(cryptage.as_slice());
-        */
         output_stream.write_all(final_sent_buffer).unwrap();
         output_stream.flush().unwrap();
         user_buffer.clear();
