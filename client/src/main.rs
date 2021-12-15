@@ -1,7 +1,5 @@
 #![allow(unused_variables)]
 
-
-use std::env;
 use std::process;
 use std::thread;
 use std::io::{self, Read, Write};
@@ -11,22 +9,9 @@ use block_modes::{BlockMode, Cbc};
 use block_modes::block_padding::Pkcs7;
 use hex_literal::hex;
 
+
 const SERVER_ADDR:&str = "127.0.0.1:9999";
 
-
-struct Program {
-    name: String
-}
-/*
-fn encrypt (user_buffer: &mut String, cipher: Cbc<Aes128, Pkcs7>) -> &[u8] {
-    let user_buffer_encrypted = cipher.encrypt_vec(user_buffer as [u8]);
-    user_buffer_encrypted
-}
-fn decrypt (user_buffer_encrypted : &mut String, cipher: Cbc<Aes128, Pkcs7>) -> &[u8] {
-    let user_buffer_decrypted = cipher.decrypt_vec(&user_buffer_encrypted).unwrap();
-    user_buffer_decrypted
-}
- */
 
 fn dechiffrer (client_buffer: &[u8]) -> String{
     //cypher variables
@@ -40,6 +25,10 @@ fn dechiffrer (client_buffer: &[u8]) -> String{
     let prefinal_buffer: &[u8] = &user_buffer_uncrypted;
     let stdout_string:&str = std::str::from_utf8(&prefinal_buffer).unwrap();
     stdout_string.to_string()
+}
+
+struct Program {
+    name: String
 }
 
 impl Program {
@@ -62,10 +51,7 @@ impl Program {
 
 
 fn main() {
-    let mut args = env::args();
-    let program = Program::new(
-        args.next().unwrap_or("test".to_string())
-    );
+    let program = Program::new("my programme".to_string());
 
     let mut stream = TcpStream::connect(SERVER_ADDR).unwrap_or_else(|error|
         program.print_fail(error.to_string())
