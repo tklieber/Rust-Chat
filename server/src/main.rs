@@ -15,20 +15,22 @@ use tokio::io::AsyncReadExt;
 const LISTNER_ADDR: &str = "127.0.0.1:9999";
 
 
-/*
+
 fn dechiffrer (recv_data: &[u8]) -> String{
     type Aes128Cbc = Cbc<Aes128, Pkcs7>;
     let key = hex!("000102030405060708090a0b0c0d0e0f");
     let iv = hex!("f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff");
     let cipher = Aes128Cbc::new_from_slices(&key, &iv).unwrap();
 
-    let user_buffer_uncrypted = cipher.decrypt_vec(recv_data);
-    let prefinal_buffer: &[u8] = &user_buffer_uncrypted.unwrap();
+    let user_buffer_uncrypted = cipher.decrypt_vec(recv_data).unwrap();
+    println!("{:?} -> after decrypt",user_buffer_uncrypted);
+    let prefinal_buffer: &[u8] = &user_buffer_uncrypted;
 
-    let stdout_string:&str = std::str::from_utf8(prefinal_buffer).unwrap();
+    let stdout_string:&str = std::str::from_utf8(&prefinal_buffer).unwrap();
     stdout_string.to_string()
 }
- */
+
+
 
 #[tokio::main]
 async fn main() {
@@ -50,17 +52,19 @@ async fn main() {
             let (reading, mut writing) = socket.split();
 
             let mut reading = BufReader::new(reading);
-            let recved_data: &mut [u8] = &mut [0u8];
+            let recved_data: &mut[u8] = &mut [0u8;16];
 
             loop {
                 //permet de lire et envoyer en même temps, un peu comme thread
                 tokio::select! {
                     resultat_select = reading.read(recved_data) => {
-                        let sended_data = &resultat_select.as_ref().unwrap();
-                        println!("{}",sended_data);
-                        println!("{:?}",&resultat_select);
+                        let buf_size = resultat_select.unwrap(); //nb d'élément
+                        println!("{:?} -> encrypted data",&recved_data);
+                        println!("{}",buf_size);
+                        //println!("{:?}",resultat_select);
 
-                        //-------let mut recved_string = dechiffrer(recved_data);
+                        let recved_string = dechiffrer(&recved_data);
+                        println!("{}",recved_string);
                         //si on ne reçoit rien alors ça romp le TCPStream
 
                          //-------if recved_data == 0 {
@@ -68,14 +72,13 @@ async fn main() {
                          //------- break
                          //------- }
 
-
                         //si l'user entre "quit" alors ça romp le TCPStream
                         //-------if recved_string == String::from(":quit\n"){
                             //-------println!("Utilisateur {}, s'est déconnecté", addr);
                             //-------break
                         //-------}
 
-                        tx.send((&sended_data, addr)).unwrap(); //-> rx (a besoin d'un &[u8]
+                        tx.send((recved_string, addr)).unwrap(); //-> rx (a besoin d'un &[u8]
 
                         //on enlève la touche "entré"
                         //-------if recved_string.ends_with('\n') { recved_string.pop(); if recved_string.ends_with('\r') { recved_string.pop();}}
@@ -93,31 +96,6 @@ async fn main() {
                         }
                     }
                 }
-                /*
-                match stream.read(&mut data) {
-                    Ok(size) => {
-                        //Si 0 octect reçu --> client déconnecté
-                        if size < 1 {
-                            println!("client {} déconnecté", adresse);
-                            return
-                        }
-                        /*
-                        // Ecrit dans la console et send le message au user distant
-                        // OLD -> stream.write_all(&data[0..size]).unwrap();
-                        tx.send(stream.read(&mut data).unwrap());
-                        stream.write_all(&data[0..size]).unwrap();
-                        let msguser = from_utf8(&data).unwrap();
-                        println!("-> L'utilisateur {} à envoyé: {}\n", stream.peer_addr().unwrap(), msguser);
-                        true
-                         */
-                    },
-                    Err(ref e) if e.kind() == ErrorKind::WouldBlock => { return }
-                    Err(e) => {
-                        println!("Erreur I/O rencontré : {}", e);
-                        return
-                    },
-                }{}
-                 */
             }
         });
     }
