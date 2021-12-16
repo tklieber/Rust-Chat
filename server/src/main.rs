@@ -1,16 +1,45 @@
-//Server
-#![allow(unused_variables)]
-//#![allow(unused_imports)]
+//
+// Rust : Projet de messagerie instantanée
+//
+// Auteurs : Quentin CHARLES, Nicolas TAHON, Tristan KLIEBER
+//
 
-use tokio::{sync::broadcast, net::TcpListener, io::{BufReader, AsyncWriteExt, AsyncReadExt}};
+use std::process;
+use tokio::{sync::broadcast,
+            net::TcpListener,
+            io::{BufReader, AsyncWriteExt, AsyncReadExt}};
 use aes::Aes128;
-use block_modes::{BlockMode, Cbc, block_padding::Pkcs7};
+use block_modes::{BlockMode, Cbc,
+                  block_padding::Pkcs7};
 use hex_literal::hex;
-
+use std::str;
 
 
 //Adresse d'écoute
 const LISTNER_ADDR: &str = "127.0.0.1:9999";
+
+struct Program {
+    name: String
+}
+
+impl Program {
+    fn new(name: String) -> Program {
+        Program { name }
+    }
+
+    fn print_error(&self,mesg: String) {
+        println!("{}: Erreur rencontré : {}",self.name ,mesg);
+    }
+
+    fn print_fail(&self,mesg: String) -> ! {
+        self.print_error(mesg);
+        self.fail();
+    }
+
+    fn exit(&self,status: i32) -> ! { process::exit(status); }
+    fn fail(&self) -> ! { self.exit(-1); }
+}
+
 
 
 fn dechiffrer (recv_data: &[u8]) -> String{
@@ -22,8 +51,8 @@ fn dechiffrer (recv_data: &[u8]) -> String{
     let cipher = Aes128Cbc::new_from_slices(&key, &iv).unwrap();
     //---------------
     let user_buffer_uncrypted = cipher.decrypt_vec(recv_data).unwrap();
-    let prefinal_buffer: &[u8] = &user_buffer_uncrypted;
-    let stdout_string:&str = std::str::from_utf8(&prefinal_buffer).unwrap();
+    let sliced_user_buffer_uncrypted: &[u8] = &user_buffer_uncrypted;
+    let stdout_string:&str = std::str::from_utf8(&sliced_user_buffer_uncrypted).unwrap();
     stdout_string.to_string()
 }
 
@@ -36,19 +65,20 @@ fn chiffrer (msguser: String) -> Vec<u8>{
     let cipher = Aes128Cbc::new_from_slices(&key, &iv).unwrap();
     //---------------
     let msguser: &[u8] = &msguser.as_bytes();
-    let user_buffer_encrypted = cipher.encrypt_vec(&msguser);
-    user_buffer_encrypted
+    let vec_user_buffer_encrypted = cipher.encrypt_vec(&msguser);
+    vec_user_buffer_encrypted
 }
 
 #[tokio::main]
 async fn main() {
+    let program = Program::new("Chat Server".to_string());
+
     let listener = TcpListener::bind(LISTNER_ADDR).await.unwrap();
     println!("En attente d'un client....");
 
     let (tx, _rx) = broadcast::channel(10);
 
     loop {
-        //Accepte les clients qui viennent sur le TCPStream
         let (mut socket, addr) = listener.accept().await.unwrap();
 
         let tx = tx.clone();
@@ -60,11 +90,19 @@ async fn main() {
 
             let mut reading = BufReader::new(reading);
             let recved_data: &mut[u8] = &mut [0u8;2048];
+            let mut pseudoset = 0;
+            let mut pseudo: String = String::new();
+
+            let test_msg = chiffrer(String::from("Entrez votre pseudo :"));
+            let test_msg = test_msg.as_slice();
+            writing.write_all(test_msg).await.unwrap();
 
             loop {
                 tokio::select! {
                     resultat_select = reading.read(recved_data) => {
-                        let buf_size = resultat_select.unwrap(); //nb d'élément du buffer reçu
+
+                        let buf_size = resultat_select.unwrap(); //nb d'éléments dans le buffer
+
                         //si on ne reçoit rien alors ça romp le TCPStream
                          if buf_size < 1 {
                             println!("Utilisateur {} s'est déconnecté", addr);
@@ -74,34 +112,42 @@ async fn main() {
                         let new_slice = &recved_data[0..buf_size];
                         let mut recved_string = dechiffrer(&new_slice);
 
-                        //si l'user entre "quit" alors ça romp le TCPStream
-                        if recved_string == String::from(":quit\n"){
-                            println!("Utilisateur {}, s'est déconnecté", addr);
-                            break
-                        }
-
-                        //on enlève la touche "entré"
                         if recved_string.ends_with('\n') {
                             recved_string.pop();
                             if recved_string.ends_with('\r') {
                                 recved_string.pop();}
                         }
 
-                        println!("{} à écrit : {}",addr, recved_string);
+                        if pseudoset != 1 {
+                            pseudo = recved_string.clone();
+                            println!("L'utilisateur avec l'IP '{}' à choisi le pseudo : {}", addr, pseudo);
+                            pseudoset = 1;
+                        } else {
+                            if recved_string == String::from(":quit"){
+                                println!("Utilisateur '{}' avec l'IP {} s'est déconnecté", pseudo, addr);
+                                break
+                            }
 
-                        tx.send((recved_string, addr)).unwrap(); //-> rx (a besoin d'un &[u8]
+                            println!("{} avec le pseudo '{}' à écrit : {}",addr, pseudo, recved_string);
+
+                            tx.send((recved_string, addr, pseudo.clone())).unwrap(); //-> rx à besoin d'un &[u8]
+                        }
                     }
                     resultat_select = rx.recv() => {
-                        let (msguser, other_addresses) = resultat_select.unwrap();
+                        let (msguser, other_addresses, pseudo) = resultat_select.unwrap();
+
                         if addr != other_addresses {
-                            let msguser_to_send = format!("{} a envoyé : {}", addr, msguser);
+                            let msguser_to_send = format!("{} a envoyé : {}", pseudo, msguser);
 
                             let crypted_msg = chiffrer(msguser_to_send.clone());
                             let crypted_msg = crypted_msg.as_slice();
 
                             //println!("slice avant envoie : {:?}\n", bytes_to_send);
 
-                            writing.write_all(crypted_msg).await.unwrap();
+                            match writing.write_all(crypted_msg).await{
+                                Err(e) => println!("Une erreur est survenue lors de l'envoie du message : {}", e),
+                                _ => continue,
+                            };
                         }
                     }
                 }
