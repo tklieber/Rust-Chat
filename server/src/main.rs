@@ -9,8 +9,7 @@ use tokio::{sync::broadcast,
             net::TcpListener,
             io::{BufReader, AsyncWriteExt, AsyncReadExt}};
 use aes::Aes128;
-use block_modes::{BlockMode, Cbc,
-                  block_padding::Pkcs7};
+use block_modes::{BlockMode, Cbc, block_padding::Pkcs7};
 use hex_literal::hex;
 use std::str;
 
@@ -42,21 +41,21 @@ impl Program {
 
 
 fn dechiffrer (recv_data: &[u8]) -> String{
-    //cypher variables
+    //cipher variables
     //----------------
     type Aes128Cbc = Cbc<Aes128, Pkcs7>;
     let key = hex!("000102030405060708090a0b0c0d0e0f");
     let iv = hex!("f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff");
     let cipher = Aes128Cbc::new_from_slices(&key, &iv).unwrap();
     //---------------
-    let user_buffer_uncrypted = cipher.decrypt_vec(recv_data).unwrap();
+    let user_buffer_uncrypted =  cipher.decrypt_vec(recv_data).unwrap();
     let sliced_user_buffer_uncrypted: &[u8] = &user_buffer_uncrypted;
     let stdout_string:&str = std::str::from_utf8(&sliced_user_buffer_uncrypted).unwrap();
     stdout_string.to_string()
 }
 
 fn chiffrer (msguser_to_send: String) -> Vec<u8>{
-    //cypher variables
+    //cipher variables
     //----------------
     type Aes128Cbc = Cbc<Aes128, Pkcs7>;
     let key = hex!("000102030405060708090a0b0c0d0e0f");
@@ -145,7 +144,7 @@ async fn main() {
                             println!("{} avec le pseudo '{}' à écrit : {}",addr, pseudo, recved_string);
 
                             match tx.send((recved_string, addr, pseudo.clone())) {
-                                Err(e) => println!("Une erreur est survenue lors de l'envoie du message : {}", e),
+                                Err(e) => program.print_error(e.to_string()),
                                 _ => continue,
                             } //-> rx à besoin d'un &[u8]
                         }
