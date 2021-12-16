@@ -103,7 +103,12 @@ fn main() {
 
     loop {
 
-        io::stdin().read_line(&mut user_buffer).unwrap();
+        match io::stdin().read_line(&mut user_buffer){
+            Ok(_) => {
+                //Rien à faire si ça marche :)
+            },
+            Err(e) => println!("Une erreur est survenue : {}", e)
+        }
 
         let user_buffer_encrypted = chiffrer(user_buffer.clone());
         // de Vec<u8>  à ->  &[u8]
