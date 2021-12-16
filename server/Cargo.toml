@@ -7,3 +7,6 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1", features = ["full"]}
+block-modes = "0.8.1"
+aes = "0.7.5"
+hex-literal = "0.3.4"
