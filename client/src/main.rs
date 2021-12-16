@@ -4,7 +4,6 @@
 // Auteurs : Quentin CHARLES, Nicolas TAHON, Tristan KLIEBER
 //
 
-
 use std::process;
 use std::thread;
 use std::io::{self, Read, Write};
@@ -104,14 +103,14 @@ fn main() {
 
     loop {
 
-        io::stdin().read_line(&mut user_buffer).unwrap_or_else(|error| program.print_fail(error.to_string()));
+        io::stdin().read_line(&mut user_buffer).unwrap();
 
         let user_buffer_encrypted = chiffrer(user_buffer.clone());
         // de Vec<u8>  à ->  &[u8]
         let final_sent_buffer:&[u8] = &user_buffer_encrypted;
 
         output_stream.write_all(final_sent_buffer).unwrap();
-        output_stream.flush().unwrap_or_else(|error| program.print_fail(error.to_string()));
+        output_stream.flush().unwrap();
         user_buffer.clear();
     }
 }
