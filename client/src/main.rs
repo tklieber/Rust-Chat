@@ -1,4 +1,9 @@
-#![allow(unused_variables)]
+//
+// Rust : Projet de messagerie instantanée
+//
+// Auteurs : Quentin CHARLES, Nicolas TAHON, Tristan KLIEBER
+//
+
 
 use std::process;
 use std::thread;
@@ -22,10 +27,25 @@ fn dechiffrer (client_buffer: &[u8]) -> String{
     let cipher = Aes128Cbc::new_from_slices(&key, &iv).unwrap();
     //---------------
     let user_buffer_uncrypted = cipher.decrypt_vec(client_buffer).unwrap();
-    let prefinal_buffer: &[u8] = &user_buffer_uncrypted;
-    let stdout_string:&str = std::str::from_utf8(&prefinal_buffer).unwrap();
+    let sliced_user_buffer_uncrypted: &[u8] = &user_buffer_uncrypted;
+    let stdout_string:&str = std::str::from_utf8(&sliced_user_buffer_uncrypted).unwrap();
     stdout_string.to_string()
 }
+
+
+fn chiffrer (user_buffer: String) -> Vec<u8>{
+    //cypher variables
+    //----------------
+    type Aes128Cbc = Cbc<Aes128, Pkcs7>;
+    let key = hex!("000102030405060708090a0b0c0d0e0f");
+    let iv = hex!("f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff");
+    let cipher = Aes128Cbc::new_from_slices(&key, &iv).unwrap();
+    //---------------
+    let user_buffer: &[u8] = &user_buffer.as_bytes();
+    let vec_user_buffer_encrypted = cipher.encrypt_vec(&user_buffer);
+    vec_user_buffer_encrypted
+}
+
 
 struct Program {
     name: String
@@ -33,11 +53,11 @@ struct Program {
 
 impl Program {
     fn new(name: String) -> Program {
-        Program { name: name }
+        Program { name }
     }
 
     fn print_error(&self,mesg: String) {
-        println!("{}: error: {}",self.name,mesg);
+        println!("{}: Erreur rencontré : {}",self.name ,mesg);
     }
 
     fn print_fail(&self,mesg: String) -> ! {
@@ -51,14 +71,12 @@ impl Program {
 
 
 fn main() {
-    let program = Program::new("my programme".to_string());
+    let program = Program::new("Client".to_string());
 
-    let mut stream = TcpStream::connect(SERVER_ADDR).unwrap_or_else(|error|
-        program.print_fail(error.to_string())
-    );
-    let mut input_stream = stream.try_clone().unwrap();
+    let mut stream = TcpStream::connect(SERVER_ADDR).unwrap_or_else(|error| program.print_fail(error.to_string()));
+    let mut input_stream = stream.try_clone().unwrap_or_else(|error| program.print_fail(error.to_string()));
 
-    let handler = thread::spawn(move || {
+    thread::spawn(move || {
         let mut client_buffer: &mut [u8] = &mut [0u8;2048];
 
         loop {
@@ -73,7 +91,7 @@ fn main() {
                         let new_slice = &client_buffer[0..n];
                         let printed_strings = dechiffrer(&new_slice);
                         println!("{}",printed_strings);
-                        io::stdout().flush().unwrap();
+                        io::stdout().flush().unwrap_or_else(|error| program.print_fail(error.to_string()));
                     }
                 },
                 Err(error) => program.print_fail(error.to_string()),
@@ -86,24 +104,14 @@ fn main() {
 
     loop {
 
-        io::stdin().read_line(&mut user_buffer).unwrap();
+        io::stdin().read_line(&mut user_buffer).unwrap_or_else(|error| program.print_fail(error.to_string()));
 
-        /*
-        -----------------
-        CIPHER TEST
-        -----------------
-        */
-        type Aes128Cbc = Cbc<Aes128, Pkcs7>;
-        let key = hex!("000102030405060708090a0b0c0d0e0f");
-        let iv = hex!("f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff");
-        let cipher = Aes128Cbc::new_from_slices(&key, &iv).unwrap();
-        //encrypt the data
-        let user_buffer_encrypted = cipher.encrypt_vec(user_buffer.as_bytes());
-        //  Vec<u8>  ->  &[u8]
+        let user_buffer_encrypted = chiffrer(user_buffer.clone());
+        // de Vec<u8>  à ->  &[u8]
         let final_sent_buffer:&[u8] = &user_buffer_encrypted;
-        //-----------> on envoie un &[u8]
+
         output_stream.write_all(final_sent_buffer).unwrap();
-        output_stream.flush().unwrap();
+        output_stream.flush().unwrap_or_else(|error| program.print_fail(error.to_string()));
         user_buffer.clear();
     }
 }
