@@ -41,7 +41,6 @@ impl Program {
 }
 
 
-
 fn dechiffrer (recv_data: &[u8]) -> String{
     //cypher variables
     //----------------
@@ -56,7 +55,7 @@ fn dechiffrer (recv_data: &[u8]) -> String{
     stdout_string.to_string()
 }
 
-fn chiffrer (msguser: String) -> Vec<u8>{
+fn chiffrer (msguser_to_send: String) -> Vec<u8>{
     //cypher variables
     //----------------
     type Aes128Cbc = Cbc<Aes128, Pkcs7>;
@@ -64,16 +63,20 @@ fn chiffrer (msguser: String) -> Vec<u8>{
     let iv = hex!("f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff");
     let cipher = Aes128Cbc::new_from_slices(&key, &iv).unwrap();
     //---------------
-    let msguser: &[u8] = &msguser.as_bytes();
-    let vec_user_buffer_encrypted = cipher.encrypt_vec(&msguser);
+    let msguser_to_send: &[u8] = &msguser_to_send.as_bytes();
+    let vec_user_buffer_encrypted = cipher.encrypt_vec(&msguser_to_send);
     vec_user_buffer_encrypted
 }
 
 #[tokio::main]
 async fn main() {
-    let program = Program::new("Chat Server".to_string());
-
-    let listener = TcpListener::bind(LISTNER_ADDR).await.unwrap();
+    let listener = match TcpListener::bind(LISTNER_ADDR).await{
+        Err(_) => {
+            println!("Adresse déjà utilisé !");
+            process::exit(0)
+        },
+        Ok(listener) => listener,
+    };
     println!("En attente d'un client....");
 
     let (tx, _rx) = broadcast::channel(10);
@@ -86,22 +89,33 @@ async fn main() {
         println!("Nouvelle connexion: {}", addr);
 
         tokio::spawn(async move {
+            let program = Program::new("client Thread".to_string());
+
             let (reading, mut writing) = socket.split();
 
             let mut reading = BufReader::new(reading);
             let recved_data: &mut[u8] = &mut [0u8;2048];
+
             let mut pseudoset = 0;
             let mut pseudo: String = String::new();
 
-            let test_msg = chiffrer(String::from("Entrez votre pseudo :"));
-            let test_msg = test_msg.as_slice();
-            writing.write_all(test_msg).await.unwrap();
+            let pseudo_msg = chiffrer(String::from("Entrez votre pseudo :"));
+            let pseudo_msg = pseudo_msg.as_slice();
+
+            match writing.write_all(pseudo_msg).await{
+                Err(e) => program.print_error(e.to_string()),
+                Ok(written) => written,
+            };
 
             loop {
                 tokio::select! {
                     resultat_select = reading.read(recved_data) => {
 
-                        let buf_size = resultat_select.unwrap(); //nb d'éléments dans le buffer
+                        //nb d'éléments dans le buffer
+                        let buf_size = match resultat_select {
+                            Err(erreur) => program.print_fail(erreur.to_string()),
+                            Ok(buf_size) => buf_size,
+                        };
 
                         //si on ne reçoit rien alors ça romp le TCPStream
                          if buf_size < 1 {
@@ -130,11 +144,17 @@ async fn main() {
 
                             println!("{} avec le pseudo '{}' à écrit : {}",addr, pseudo, recved_string);
 
-                            tx.send((recved_string, addr, pseudo.clone())).unwrap(); //-> rx à besoin d'un &[u8]
+                            match tx.send((recved_string, addr, pseudo.clone())) {
+                                Err(e) => println!("Une erreur est survenue lors de l'envoie du message : {}", e),
+                                _ => continue,
+                            } //-> rx à besoin d'un &[u8]
                         }
                     }
                     resultat_select = rx.recv() => {
-                        let (msguser, other_addresses, pseudo) = resultat_select.unwrap();
+                        let (msguser, other_addresses, pseudo) = match resultat_select {
+                            Err(erreur) => program.print_fail(erreur.to_string()),
+                            Ok(resultat) => resultat,
+                        };
 
                         if addr != other_addresses {
                             let msguser_to_send = format!("{} a envoyé : {}", pseudo, msguser);
